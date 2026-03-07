@@ -18,7 +18,7 @@ async fn main() -> notify::Result<()> {
     // We use a debounce-like mechanism to avoid multiple triggers for a single save
     let last_trigger = Arc::new(Mutex::new(std::time::Instant::now() - Duration::from_secs(5)));
 
-    let mut watcher = RecommendedWatcher::new(move |res| {
+    let mut watcher = RecommendedWatcher::new(move |res: Result<notify::Event, notify::Error>| {
         match res {
             Ok(event) => {
                 if let notify::EventKind::Modify(_) = event.kind {
