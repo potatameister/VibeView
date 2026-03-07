@@ -1,0 +1,12 @@
+.gradle/
+build/
+app/build/
+vibe-watch/target/
+out/
+*.dex
+*.class
+.DS_Store
+*.swp
+local.properties
+.idea/
+.vscode/
