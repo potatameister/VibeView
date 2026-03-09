@@ -116,6 +116,12 @@ async fn start_watcher(path_str: &str) -> Result<()> {
     
     println!("{}", format!("👀 Watching: {:?}", path).cyan());
 
+    // INITIAL PUSH: Send the current state of the project immediately
+    println!("{}", "🚀 Performing initial sync...".yellow());
+    if let Err(e) = compile_and_push(&path).await {
+        println!("{}", format!("❌ Initial sync failed: {}", e).red());
+    }
+
     let (tx, mut rx) = mpsc::channel(1);
     let mut last_trigger = Instant::now() - Duration::from_secs(5);
 
