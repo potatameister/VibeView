@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+use walkdir::WalkDir;
 
 #[derive(Parser)]
 #[command(name = "vibe")]
@@ -18,7 +19,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a VibeView project
+    /// Initialize a VibeView project (in a new or current folder)
     Init { 
         /// Optional name of the project folder
         name: Option<String> 
@@ -116,7 +117,7 @@ async fn start_watcher(path_str: &str) -> Result<()> {
     
     println!("{}", format!("👀 Watching: {:?}", path).cyan());
 
-    // INITIAL PUSH: Send the current state of the project immediately
+    // INITIAL PUSH
     println!("{}", "🚀 Performing initial sync...".yellow());
     if let Err(e) = compile_and_push(&path).await {
         println!("{}", format!("❌ Initial sync failed: {}", e).red());
@@ -160,11 +161,24 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
         fs::create_dir(&out_dir)?;
     }
 
-    // 1. Compile Kotlin - we now include all .kt files in the project tree
-    // We remove -Xuse-k2 for compatibility and disable jansi colors which crash in termux
+    // 1. Manually find all .kt files because kotlinc doesn't support recursive wildcards natively
+    let mut kt_files = Vec::new();
+    for entry in WalkDir::new(project_path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map(|s| s == "kt").unwrap_or(false))
+    {
+        kt_files.push(entry.path().to_string_lossy().into_owned());
+    }
+
+    if kt_files.is_empty() {
+        return Err(anyhow::anyhow!("No .kt files found in project directory"));
+    }
+
+    // 2. Compile Kotlin
     let status = Command::new("kotlinc")
         .args(&["-d", "out/", "-Dkotlin.colors.enabled=false"])
-        .arg("**/*.kt")
+        .args(&kt_files)
         .current_dir(project_path)
         .status();
 
@@ -173,15 +187,13 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
         _ => return Err(anyhow::anyhow!("kotlinc failed")),
     }
 
-    // 2. DEX with D8 or DX
+    // 3. DEX with D8 or DX
     let mut dex_cmd = Command::new("d8");
     dex_cmd.args(&["out/*.class", "--output", "out/classes.dex", "--min-api", "26"]);
     
     let mut status = dex_cmd.current_dir(project_path).status();
 
-    // Fallback to DX if D8 is missing
     if status.is_err() {
-        println!("{}", "⚠️ 'd8' missing, trying 'dx' fallback...".yellow());
         status = Command::new("dx")
             .args(&["--dex", "--output=out/classes.dex", "out/*.class"])
             .current_dir(project_path)
@@ -193,7 +205,7 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
             println!("{}", format!("✅ Compiled in {}ms", start.elapsed().as_millis()).green());
             push_to_app(project_path).await?;
         }
-        _ => return Err(anyhow::anyhow!("Both d8 and dx failed. Check 'vibe doctor'.")),
+        _ => return Err(anyhow::anyhow!("DEXing failed")),
     }
 
     Ok(())
@@ -219,14 +231,13 @@ async fn push_to_app(project_path: &Path) -> Result<()> {
         Ok(response) if response.status().is_success() => {
             println!("{}", "🚀 Successfully pushed to App!".green().bold());
             
-            // AUTO-FOREGROUND: Bring the app to the front using Termux am start
+            // AUTO-FOREGROUND
             let _ = Command::new("am")
                 .args(&["start", "--user", "0", "-n", "com.potatameister.vibeview/.MainActivity"])
                 .output();
         }
         _ => {
             println!("{}", "❌ Error: Could not connect to VibeView App on localhost:8888".red());
-            println!("   Ensure the VibeView app is OPEN on your phone.");
         }
     }
 
@@ -239,7 +250,6 @@ fn run_doctor() -> Result<()> {
     check_tool("kotlinc", "pkg install kotlin", &["-version"]);
     check_tool("cargo", "pkg install rust", &["--version"]);
     
-    // Check for d8 or dx
     if !check_tool_silent("d8", &["--version"]) && !check_tool_silent("dx", &["--version"]) {
         println!("  {} DEX tool (d8/dx) is NOT installed. Action: pkg install dx", "✗".red());
     } else {
