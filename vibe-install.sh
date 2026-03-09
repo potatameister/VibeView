@@ -16,14 +16,18 @@ echo -e "${CYAN}VibeView Ultimate Installer${NC}"
 echo "----------------------------"
 
 # 2. Add 'its-pointless' repo for Android Build Tools (d8)
+# We use a more robust way to add the repo since the setup script sometimes fails
 if ! grep -q "pointless" /data/data/com.termux/files/usr/etc/apt/sources.list.d/* 2>/dev/null; then
     echo -e "${YELLOW}Adding 'its-pointless' repository for Android tools...${NC}"
-    curl -sL https://its-pointless.github.io/setup-pointless | bash
+    # Install gnupg first to handle the key
+    pkg update && pkg install -y gnupg curl
+    # Fetch the key and add the repo
+    curl -sL https://its-pointless.github.io/pointless.gpg | apt-key add -
+    echo "deb https://its-pointless.github.io/files/24 termux extras" > /data/data/com.termux/files/usr/etc/apt/sources.list.d/pointless.list
 fi
 
 # 3. Install ALL dependencies
 echo -e "📦 Installing core developer tools..."
-# we include 'debianutils' for 'which' and 'build-tools' for 'd8'
 pkg update && pkg install -y \
     rust \
     kotlin \
