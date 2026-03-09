@@ -154,9 +154,10 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
         fs::create_dir(&out_dir)?;
     }
 
-    // 1. Compile Kotlin
+    // 1. Compile Kotlin - we now include all .kt files in the project tree
     let status = Command::new("kotlinc")
-        .args(&["*.kt", "-d", "out/", "-Xuse-k2"])
+        .args(&["-d", "out/", "-Xuse-k2"])
+        .arg("**/*.kt")
         .current_dir(project_path)
         .status();
 

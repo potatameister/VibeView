@@ -34,6 +34,8 @@ import java.io.File
 import dalvik.system.DexClassLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Enumeration
+import dalvik.system.DexFile
 
 class MainActivity : ComponentActivity() {
     private var server: ApplicationEngine? = null
@@ -91,7 +93,7 @@ class MainActivity : ComponentActivity() {
                         dexFile.writeBytes(dexBytes)
 
                         withContext(Dispatchers.Main) {
-                            statusMessage.value = "Injecting..."
+                            statusMessage.value = "Scanning project..."
                             loadAndInject(dexFile, dynamicContent)
                             isLive.value = true
                             statusMessage.value = "Live!"
@@ -116,12 +118,39 @@ class MainActivity : ComponentActivity() {
             null,
             this.javaClass.classLoader
         )
+
+        // SMART SCAN: Find any class that implements our "VibeHome" marker
+        // For MVP, we'll look for any class named '*Vibe' or containing a 'vibeHome' method.
+        // Even better: we'll look for a class that has '@Composable fun content()'
+        
         try {
-            val clazz = classLoader.loadClass("com.potatameister.vibeview.VibeSnippet")
-            val method = clazz.getDeclaredMethod("getContent")
-            dynamicContent.value = { method.invoke(null) }
+            @Suppress("DEPRECATION")
+            val df = DexFile(dexFile)
+            val classes = df.entries()
+            var found = false
+
+            while (classes.hasMoreElements()) {
+                val className = classes.nextElement()
+                // Check if the class is part of the user's project
+                if (className.startsWith("com.potatameister.vibeview")) continue 
+                
+                try {
+                    val clazz = classLoader.loadClass(className)
+                    // We look for a static method 'getContent' - this is our universal contract
+                    val method = clazz.getDeclaredMethod("getContent")
+                    dynamicContent.value = { method.invoke(null) }
+                    found = true
+                    break
+                } catch (e: Exception) {
+                    continue
+                }
+            }
+
+            if (!found) {
+                throw Exception("No 'getContent()' method found in project")
+            }
         } catch (e: Exception) {
-            throw Exception("VibeSnippet not found")
+            throw Exception("Injection failed: ${e.message}")
         }
     }
 
