@@ -1,13 +1,18 @@
 package com.potatameister.vibeview
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -18,6 +23,7 @@ import io.ktor.server.routing.*
 import java.io.File
 import dalvik.system.DexClassLoader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -26,12 +32,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // The live state of our dynamic component
         val dynamicContent = mutableStateOf<(@Composable () -> Unit)?>(null)
         val statusMessage = mutableStateOf("Waiting for first push from Termux...")
         val isLive = mutableStateOf(false)
+        val termuxLinked = mutableStateOf<Boolean?>(null) // null = unchecked, true = linked, false = error
 
-        // Start the local bridge server
         startBridgeServer(dynamicContent, statusMessage, isLive)
 
         setContent {
@@ -42,10 +47,23 @@ class MainActivity : ComponentActivity() {
                         TopAppBar(
                             title = { Text("VibeView Shell") },
                             actions = {
+                                // Termux Link Status
+                                IconButton(onClick = { checkTermuxLink(termuxLinked) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Terminal,
+                                        contentDescription = "Check Link",
+                                        tint = when(termuxLinked.value) {
+                                            true -> Color.Green
+                                            false -> Color.Red
+                                            else -> LocalContentColor.current
+                                        }
+                                    )
+                                }
+                                
                                 Badge(containerColor = if (isLive.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) {
                                     Text(if (isLive.value) "LIVE" else "IDLE", color = MaterialTheme.colorScheme.onPrimary)
                                 }
-                                Spacer(modifier = Modifier.width(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                             }
                         )
                     }
@@ -54,16 +72,60 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize().padding(padding),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            dynamicContent.value?.invoke() ?: Text(
-                                text = statusMessage.value,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (dynamicContent.value != null) {
+                                dynamicContent.value!!.invoke()
+                            } else {
+                                Text(
+                                    text = statusMessage.value,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                
+                                if (termuxLinked.value == false) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Vibe CLI not detected in Termux.",
+                                        color = Color.Red,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                    Button(
+                                        onClick = { /* Could open a dialog with the install command */ },
+                                        modifier = Modifier.padding(8.dp)
+                                    ) {
+                                        Text("Setup Instructions")
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private fun checkTermuxLink(status: MutableState<Boolean?>) {
+        // We use the Termux:Tasker RUN_COMMAND intent protocol
+        // Note: This requires 'allow-external-apps = true' in ~/.termux/termux.properties
+        try {
+            val intent = Intent()
+            intent.setClassName("com.termux", "com.termux.app.RunCommandService")
+            intent.action = "com.termux.RUN_COMMAND"
+            intent.putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/vibe")
+            intent.putExtra("com.termux.RUN_COMMAND_ARGS", arrayOf("--version"))
+            intent.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
+            
+            startService(intent)
+            
+            // For MVP, we'll assume if no exception occurs, it's at least trying.
+            // In a real app, we'd use a Result Receiver to get the actual exit code.
+            status.value = true 
+        } catch (e: Exception) {
+            status.value = false
         }
     }
 
@@ -107,20 +169,15 @@ class MainActivity : ComponentActivity() {
             this.javaClass.classLoader
         )
 
-        // Look for the standard VibeSnippet entry point
         try {
             val clazz = classLoader.loadClass("com.potatameister.vibeview.VibeSnippet")
             val method = clazz.getDeclaredMethod("getContent")
             
-            // This assumes the snippet provides a standard @Composable function
-            // Note: Real Compose hot-swapping requires a more complex "stability" wrapper
-            // For MVP, we'll swap a simple UI lambda.
             dynamicContent.value = {
-                // We invoke the static method from our injected class
-                method.invoke(null) as? Unit
+                method.invoke(null)
             }
         } catch (e: Exception) {
-            throw Exception("Failed to find VibeSnippet.getContent(): ${e.message}")
+            throw Exception("VibeSnippet not found: ${e.message}")
         }
     }
 
