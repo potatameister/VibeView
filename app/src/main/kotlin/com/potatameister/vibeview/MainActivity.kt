@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
-import io.ktor.server.netty.*
+import io.ktor.server.cio.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -36,7 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
-    private var server: NettyApplicationEngine? = null
+    private var server: CIOApplicationEngine? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
         statusMessage: MutableState<String>,
         isLive: MutableState<Boolean>
     ) {
-        server = embeddedServer(Netty, port = 8888, host = "127.0.0.1") {
+        server = embeddedServer(CIO, port = 8888, host = "127.0.0.1") {
             routing {
                 post("/push") {
                     try {

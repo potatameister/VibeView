@@ -25,7 +25,6 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Use debug signing for now or ensure secrets are provided
             signingConfig = signingConfigs.getByName("debug")
         }
         debug {
@@ -50,7 +49,6 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/INDEX.LIST"
             excludes += "META-INF/io.netty.versions.properties"
-            // More aggressive stripping
             excludes += "**/LICENSE.txt"
             excludes += "**/NOTICE.txt"
             excludes += "META-INF/*.kotlin_module"
@@ -69,8 +67,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Ktor for the local push bridge (minimal netty)
+    // Ktor CIO is much more stable and lightweight for Android
     val ktor_version = "2.3.9"
     implementation("io.ktor:ktor-server-core:$ktor_version")
-    implementation("io.ktor:ktor-server-netty:$ktor_version")
+    implementation("io.ktor:ktor-server-cio:$ktor_version")
 }
