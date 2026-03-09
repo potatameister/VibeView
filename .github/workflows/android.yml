@@ -40,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vibeview-release-signed
-          path: ${{ outcomes.sign_app.outputs.signedReleaseFile }}
+          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
 
       - name: Upload Unsigned Debug APK
         uses: actions/upload-artifact@v4
