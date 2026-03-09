@@ -18,8 +18,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a new VibeView project
-    Init { name: String },
+    /// Initialize a VibeView project (in a new or current folder)
+    Init { 
+        /// Optional name of the project folder
+        name: Option<String> 
+    },
     /// Start the hot-reload watcher
     Start {
         #[arg(default_value = ".")]
@@ -39,7 +42,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init { name } => init_project(&name)?,
+        Commands::Init { name } => init_project(name.as_deref())?,
         Commands::Start { path } => start_watcher(&path).await?,
         Commands::Build { path } => {
             let path_buf = PathBuf::from(path);
@@ -51,16 +54,23 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn init_project(name: &str) -> Result<()> {
-    let root = PathBuf::from(name);
-    if root.exists() {
-        println!("{}", format!("Error: Directory '{}' already exists", name).red());
-        return Ok(());
+fn init_project(name: Option<&str>) -> Result<()> {
+    let root = match name {
+        Some(n) => {
+            let path = PathBuf::from(n);
+            if !path.exists() {
+                fs::create_dir_all(&path)?;
+            }
+            path
+        }
+        None => PathBuf::from("."),
+    };
+
+    println!("{}", format!("🚀 Initializing VibeView project in: {:?}", root).cyan());
+
+    if !root.join("out").exists() {
+        fs::create_dir_all(root.join("out"))?;
     }
-
-    println!("{}", format!("🚀 Initializing project: {}", name).cyan());
-
-    fs::create_dir_all(root.join("out"))?;
 
     let snippet_content = r#"package com.potatameister.vibeview
 
@@ -89,15 +99,21 @@ object VibeSnippet {
     fs::write(root.join("VibeSnippet.kt"), snippet_content)?;
     
     println!("{}", "✅ Project initialized successfully!".green());
-    println!("Next steps:");
-    println!("  1. cd {}", name);
-    println!("  2. vibe start");
+    println!("Usage:");
+    println!("  vibe start");
 
     Ok(())
 }
 
 async fn start_watcher(path_str: &str) -> Result<()> {
-    let path = PathBuf::from(path_str).canonicalize()?;
+    let path = match PathBuf::from(path_str).canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            println!("{}", format!("Error: Path '{}' not found", path_str).red());
+            return Ok(());
+        }
+    };
+    
     println!("{}", format!("👀 Watching: {:?}", path).cyan());
 
     let (tx, mut rx) = mpsc::channel(1);
@@ -143,14 +159,13 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
         .args(&["*.kt", "-d", "out/", "-Xuse-k2"])
         .current_dir(project_path)
         .status()
-        .context("Failed to execute kotlinc")?;
+        .context("Failed to execute kotlinc. Is it installed?")?;
 
     if !status.success() {
         return Err(anyhow::anyhow!("kotlinc failed"));
     }
 
     // 2. DEX with D8
-    // We try to find d8, for now assuming it's in path or warning
     let d8_status = Command::new("d8")
         .args(&[
             "out/*.class",
@@ -168,8 +183,8 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
             push_to_app(project_path).await?;
         }
         _ => {
-            println!("{}", "⚠️ Warning: 'd8' not found or failed. Skipping DEX step.".yellow());
-            println!("Please ensure 'd8' is in your PATH for hot-reload to work.");
+            println!("{}", "⚠️ Warning: 'd8' failed. Hot-reload might not work.".yellow());
+            println!("   Check 'vibe doctor' for d8 instructions.");
         }
     }
 
@@ -196,12 +211,12 @@ async fn push_to_app(project_path: &Path) -> Result<()> {
         Ok(response) if response.status().is_success() => {
             println!("{}", "🚀 Successfully pushed to App!".green().bold());
         }
-        Ok(response) => {
-            println!("{}", format!("❌ App returned error: {}", response.status()).red());
+        Ok(_) => {
+            println!("{}", "❌ App returned an error.".red());
         }
         Err(_) => {
             println!("{}", "❌ Error: Could not connect to VibeView App on localhost:8888".red());
-            println!("   Make sure the VibeView app is open on your phone.");
+            println!("   Ensure the VibeView app is OPEN on your phone.");
         }
     }
 
@@ -212,22 +227,25 @@ fn run_doctor() -> Result<()> {
     println!("{}", "🩺 VibeView Doctor".bold().cyan());
 
     check_tool("kotlinc", "pkg install kotlin");
-    check_tool("d8", "Install Android Command Line Tools in Termux");
     check_tool("cargo", "pkg install rust");
+    check_tool("d8", "Install with: pkg install build-tools (from its-pointless repo)");
 
     println!("\n{}", "Check complete!".cyan());
     Ok(())
 }
 
 fn check_tool(name: &str, install_msg: &str) {
-    let status = Command::new("command")
-        .args(&["-v", name])
-        .output()
-        .is_ok();
+    // We use 'which' instead of 'command -v' for better cross-process compatibility
+    let status = Command::new("which")
+        .arg(name)
+        .output();
 
-    if status {
-        println!("  {} {} is installed", "✓".green(), name);
-    } else {
-        println!("  {} {} is NOT installed. Action: {}", "✗".red(), name, install_msg);
+    match status {
+        Ok(output) if output.status.success() => {
+            println!("  {} {} is installed", "✓".green(), name);
+        }
+        _ => {
+            println!("  {} {} is NOT installed. Action: {}", "✗".red(), name, install_msg);
+        }
     }
 }
