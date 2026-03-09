@@ -15,7 +15,18 @@ NC='\033[0m'
 echo -e "${CYAN}VibeView Ultimate Installer${NC}"
 echo "--------------------------"
 
-# 2. Add 'its-pointless' repo for Android Build Tools
+# 2. Setup Termux Permissions (External Apps)
+echo -e "🔐 Configuring Termux permissions..."
+mkdir -p ~/.termux
+if ! grep -q "allow-external-apps = true" ~/.termux/termux.properties 2>/dev/null; then
+    echo "allow-external-apps = true" >> ~/.termux/termux.properties
+    termux-reload-settings
+    echo -e "${GREEN}✓ External app access enabled.${NC}"
+else
+    echo -e "${GREEN}✓ External app access already enabled.${NC}"
+fi
+
+# 3. Add 'its-pointless' repo for Android Build Tools
 if ! grep -q "pointless" /data/data/com.termux/files/usr/etc/apt/sources.list.d/* 2>/dev/null; then
     echo -e "${YELLOW}Adding 'its-pointless' repository...${NC}"
     pkg update && pkg install -y gnupg curl
@@ -24,12 +35,11 @@ if ! grep -q "pointless" /data/data/com.termux/files/usr/etc/apt/sources.list.d/
     pkg update
 fi
 
-# 3. Install core tools with the correct package names
+# 4. Install ALL dependencies
 echo -e "📦 Installing dependencies..."
-# 'android-tools' usually contains d8/dx in modern termux
-pkg install -y rust kotlin gradle inotify-tools binutils-is-llvm git android-tools debianutils
+pkg install -y rust kotlin gradle inotify-tools binutils-is-llvm git android-tools debianutils dx
 
-# 4. Fix Kotlin PATH if necessary
+# 5. Fix Kotlin PATH
 KOTLIN_BIN="/data/data/com.termux/files/usr/opt/kotlin/bin"
 if [ -d "$KOTLIN_BIN" ] && ! echo "$PATH" | grep -q "$KOTLIN_BIN"; then
     echo -e "${YELLOW}Fixing Kotlin PATH...${NC}"
@@ -37,7 +47,7 @@ if [ -d "$KOTLIN_BIN" ] && ! echo "$PATH" | grep -q "$KOTLIN_BIN"; then
     export PATH=$PATH:$KOTLIN_BIN
 fi
 
-# 5. Handle Source Code
+# 6. Handle Source Code
 INSTALL_DIR="$HOME/.vibeview-src"
 echo -e "📡 Fetching source..."
 
@@ -50,18 +60,18 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# 6. Build and Install CLI
+# 7. Build and Install CLI
 echo -e "🔨 Building CLI..."
 cd vibe-watch
 cargo build --release
 
-# 7. Global Installation
+# 8. Global Installation
 TARGET_BIN="/data/data/com.termux/files/usr/bin/vibe"
 echo -e "🚀 Finalizing installation..."
 ln -sf "$(pwd)/target/release/vibe-watch" "$TARGET_BIN"
 
-# 8. Verification
-echo -e "\n${GREEN}✅ VibeView is now ready!${NC}"
+# 9. Verification
+echo -e "\n${GREEN}✅ VibeView is now 100% READY!${NC}"
 echo -e "Run: ${CYAN}source ~/.bashrc${NC} then ${CYAN}vibe doctor${NC}"
 echo ""
 vibe doctor
