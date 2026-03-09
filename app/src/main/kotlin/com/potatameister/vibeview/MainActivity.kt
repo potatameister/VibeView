@@ -10,8 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -154,7 +154,7 @@ fun MainScreen(
                 actions = {
                     IconButton(onClick = onCheckLink) {
                         Icon(
-                            imageVector = if (termuxLinked == true) Icons.Default.Terminal else Icons.Outlined.Terminal,
+                            imageVector = if (termuxLinked == true) Icons.AutoMirrored.Filled.List else Icons.AutoMirrored.Outlined.List,
                             contentDescription = "Link Status",
                             tint = when(termuxLinked) {
                                 true -> MaterialTheme.colorScheme.primary

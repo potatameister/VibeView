@@ -22,8 +22,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
         }
@@ -52,6 +52,8 @@ android {
             excludes += "**/LICENSE.txt"
             excludes += "**/NOTICE.txt"
             excludes += "META-INF/*.kotlin_module"
+            excludes += "META-INF/*.version"
+            excludes += "META-INF/proguard/*"
         }
     }
 }
@@ -65,7 +67,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
+    // implementation("androidx.compose.material:material-icons-extended") // REMOVED: Too heavy (20MB+)
 
     // Ktor CIO is much more stable and lightweight for Android
     val ktor_version = "2.3.9"
