@@ -93,11 +93,17 @@ class MainActivity : ComponentActivity() {
                                         color = Color.Red,
                                         style = MaterialTheme.typography.labelSmall
                                     )
+                                    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                                    val installCommand = "curl -sL https://raw.githubusercontent.com/potatameister/VibeView/main/vibe-install.sh | bash"
+                                    
                                     Button(
-                                        onClick = { /* Could open a dialog with the install command */ },
+                                        onClick = { 
+                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(installCommand))
+                                            statusMessage.value = "Install command copied to clipboard!"
+                                        },
                                         modifier = Modifier.padding(8.dp)
                                     ) {
-                                        Text("Setup Instructions")
+                                        Text("Copy Setup Command")
                                     }
                                 }
                             }
