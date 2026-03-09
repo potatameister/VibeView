@@ -158,11 +158,11 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
     let status = Command::new("kotlinc")
         .args(&["*.kt", "-d", "out/", "-Xuse-k2"])
         .current_dir(project_path)
-        .status()
-        .context("Failed to execute kotlinc. Is it installed?")?;
+        .status();
 
-    if !status.success() {
-        return Err(anyhow::anyhow!("kotlinc failed"));
+    match status {
+        Ok(s) if s.success() => (),
+        _ => return Err(anyhow::anyhow!("kotlinc failed or not found")),
     }
 
     // 2. DEX with D8
@@ -226,25 +226,25 @@ async fn push_to_app(project_path: &Path) -> Result<()> {
 fn run_doctor() -> Result<()> {
     println!("{}", "🩺 VibeView Doctor".bold().cyan());
 
-    check_tool("kotlinc", "pkg install kotlin");
-    check_tool("cargo", "pkg install rust");
-    check_tool("d8", "Install with: pkg install build-tools (from its-pointless repo)");
+    check_tool("kotlinc", "pkg install kotlin", &["-version"]);
+    check_tool("cargo", "pkg install rust", &["--version"]);
+    check_tool("d8", "Install with: pkg install build-tools (from its-pointless repo)", &["--version"]);
 
     println!("\n{}", "Check complete!".cyan());
     Ok(())
 }
 
-fn check_tool(name: &str, install_msg: &str) {
-    // We use 'which' instead of 'command -v' for better cross-process compatibility
-    let status = Command::new("which")
-        .arg(name)
+fn check_tool(name: &str, install_msg: &str, test_args: &[&str]) {
+    // Try to run the tool directly. If it exists in PATH, it will start.
+    let status = Command::new(name)
+        .args(test_args)
         .output();
 
     match status {
-        Ok(output) if output.status.success() => {
+        Ok(_) => {
             println!("  {} {} is installed", "✓".green(), name);
         }
-        _ => {
+        Err(_) => {
             println!("  {} {} is NOT installed. Action: {}", "✗".red(), name, install_msg);
         }
     }
