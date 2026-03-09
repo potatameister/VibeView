@@ -18,7 +18,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a VibeView project (in a new or current folder)
+    /// Initialize a VibeView project
     Init { 
         /// Optional name of the project folder
         name: Option<String> 
@@ -162,30 +162,30 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
 
     match status {
         Ok(s) if s.success() => (),
-        _ => return Err(anyhow::anyhow!("kotlinc failed or not found")),
+        _ => return Err(anyhow::anyhow!("kotlinc failed")),
     }
 
-    // 2. DEX with D8
-    let d8_status = Command::new("d8")
-        .args(&[
-            "out/*.class",
-            "--output",
-            "out/classes.dex",
-            "--min-api",
-            "26",
-        ])
-        .current_dir(project_path)
-        .status();
+    // 2. DEX with D8 or DX
+    let mut dex_cmd = Command::new("d8");
+    dex_cmd.args(&["out/*.class", "--output", "out/classes.dex", "--min-api", "26"]);
+    
+    let mut status = dex_cmd.current_dir(project_path).status();
 
-    match d8_status {
+    // Fallback to DX if D8 is missing
+    if status.is_err() {
+        println!("{}", "⚠️ 'd8' missing, trying 'dx' fallback...".yellow());
+        status = Command::new("dx")
+            .args(&["--dex", "--output=out/classes.dex", "out/*.class"])
+            .current_dir(project_path)
+            .status();
+    }
+
+    match status {
         Ok(s) if s.success() => {
             println!("{}", format!("✅ Compiled in {}ms", start.elapsed().as_millis()).green());
             push_to_app(project_path).await?;
         }
-        _ => {
-            println!("{}", "⚠️ Warning: 'd8' failed. Hot-reload might not work.".yellow());
-            println!("   Check 'vibe doctor' for d8 instructions.");
-        }
+        _ => return Err(anyhow::anyhow!("Both d8 and dx failed. Check 'vibe doctor'.")),
     }
 
     Ok(())
@@ -211,10 +211,7 @@ async fn push_to_app(project_path: &Path) -> Result<()> {
         Ok(response) if response.status().is_success() => {
             println!("{}", "🚀 Successfully pushed to App!".green().bold());
         }
-        Ok(_) => {
-            println!("{}", "❌ App returned an error.".red());
-        }
-        Err(_) => {
+        _ => {
             println!("{}", "❌ Error: Could not connect to VibeView App on localhost:8888".red());
             println!("   Ensure the VibeView app is OPEN on your phone.");
         }
@@ -228,24 +225,29 @@ fn run_doctor() -> Result<()> {
 
     check_tool("kotlinc", "pkg install kotlin", &["-version"]);
     check_tool("cargo", "pkg install rust", &["--version"]);
-    check_tool("d8", "Install with: pkg install build-tools (from its-pointless repo)", &["--version"]);
+    
+    // Check for d8 or dx
+    if !check_tool_silent("d8", &["--version"]) && !check_tool_silent("dx", &["--version"]) {
+        println!("  {} DEX tool (d8/dx) is NOT installed. Action: pkg install dx", "✗".red());
+    } else {
+        println!("  {} DEX tool is installed", "✓".green());
+    }
 
     println!("\n{}", "Check complete!".cyan());
     Ok(())
 }
 
 fn check_tool(name: &str, install_msg: &str, test_args: &[&str]) {
-    // Try to run the tool directly. If it exists in PATH, it will start.
-    let status = Command::new(name)
-        .args(test_args)
-        .output();
-
-    match status {
-        Ok(_) => {
-            println!("  {} {} is installed", "✓".green(), name);
-        }
-        Err(_) => {
-            println!("  {} {} is NOT installed. Action: {}", "✗".red(), name, install_msg);
-        }
+    if check_tool_silent(name, test_args) {
+        println!("  {} {} is installed", "✓".green(), name);
+    } else {
+        println!("  {} {} is NOT installed. Action: {}", "✗".red(), name, install_msg);
     }
+}
+
+fn check_tool_silent(name: &str, test_args: &[&str]) -> bool {
+    Command::new(name)
+        .args(test_args)
+        .output()
+        .is_ok()
 }
