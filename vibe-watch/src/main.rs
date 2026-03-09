@@ -217,6 +217,11 @@ async fn push_to_app(project_path: &Path) -> Result<()> {
     match res {
         Ok(response) if response.status().is_success() => {
             println!("{}", "🚀 Successfully pushed to App!".green().bold());
+            
+            // AUTO-FOREGROUND: Bring the app to the front using Termux am start
+            let _ = Command::new("am")
+                .args(&["start", "--user", "0", "-n", "com.potatameister.vibeview/.MainActivity"])
+                .output();
         }
         _ => {
             println!("{}", "❌ Error: Could not connect to VibeView App on localhost:8888".red());
