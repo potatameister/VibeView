@@ -152,22 +152,26 @@ async fn start_watcher(path_str: &str) -> Result<()> {
     Ok(())
 }
 
-fn get_app_classpath() -> String {
-    // 1. Get the APK path of the VibeView App
-    let output = Command::new("pm")
-        .args(&["path", "com.potatameister.vibeview"])
-        .output();
-
+fn get_libs_classpath() -> String {
     let mut classpath = String::new();
+    let install_dir = std::env::var("HOME").unwrap_or_default() + "/.vibeview-src";
+    let libs_dir = PathBuf::from(install_dir).join("libs");
 
-    if let Ok(out) = output {
-        let path_str = String::from_utf8_lossy(&out.stdout);
-        if let Some(path) = path_str.trim().strip_prefix("package:") {
-            classpath.push_str(path);
+    if libs_dir.exists() {
+        // Add every JAR in the libs folder to the classpath
+        if let Ok(entries) = fs::read_dir(libs_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.path().extension().map(|s| s == "jar").unwrap_or(false) {
+                    if !classpath.is_empty() {
+                        classpath.push(':');
+                    }
+                    classpath.push_str(&entry.path().to_string_lossy());
+                }
+            }
         }
     }
 
-    // 2. Add the system framework as a fallback/base
+    // Add system framework as base
     if !classpath.is_empty() {
         classpath.push(':');
     }
@@ -199,8 +203,8 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
         return Err(anyhow::anyhow!("No .kt files found"));
     }
 
-    // 2. Compile Kotlin with the Dynamic Classpath (The Secret Sauce)
-    let classpath = get_app_classpath();
+    // 2. Compile Kotlin with the new LIBS Classpath
+    let classpath = get_libs_classpath();
     let mut kotlinc = Command::new("kotlinc");
     kotlinc.args(&["-d", "out/", "-Dkotlin.colors.enabled=false", "-cp", &classpath]);
     
@@ -210,7 +214,7 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
 
     match status {
         Ok(s) if s.success() => (),
-        _ => return Err(anyhow::anyhow!("kotlinc failed")),
+        _ => return Err(anyhow::anyhow!("kotlinc failed. Check your imports.")),
     }
 
     // 3. DEX with D8 or DX
@@ -282,14 +286,13 @@ fn run_doctor() -> Result<()> {
         println!("  {} DEX tool is installed", "✓".green());
     }
 
-    // Check for App installation
-    let app_path = Command::new("pm").args(&["path", "com.potatameister.vibeview"]).output();
-    if let Ok(out) = app_path {
-        if out.status.success() {
-            println!("  {} VibeView App is linked", "✓".green());
-        } else {
-            println!("  {} VibeView App NOT found. Action: Install the APK from GitHub", "✗".red());
-        }
+    // Check for Libs
+    let install_dir = std::env::var("HOME").unwrap_or_default() + "/.vibeview-src";
+    let libs_dir = PathBuf::from(install_dir).join("libs");
+    if libs_dir.exists() {
+        println!("  {} Core libraries (AndroidX/Compose) are ready", "✓".green());
+    } else {
+        println!("  {} Core libraries MISSING. Action: Run the installer again", "✗".red());
     }
 
     println!("\n{}", "Check complete!".cyan());

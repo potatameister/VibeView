@@ -15,18 +15,15 @@ NC='\033[0m'
 echo -e "${CYAN}VibeView Ultimate Installer${NC}"
 echo "--------------------------"
 
-# 2. Setup Termux Permissions (External Apps)
+# 2. Setup Termux Permissions
 echo -e "🔐 Configuring Termux permissions..."
 mkdir -p ~/.termux
 if ! grep -q "allow-external-apps = true" ~/.termux/termux.properties 2>/dev/null; then
     echo "allow-external-apps = true" >> ~/.termux/termux.properties
     termux-reload-settings
-    echo -e "${GREEN}✓ External app access enabled.${NC}"
-else
-    echo -e "${GREEN}✓ External app access already enabled.${NC}"
 fi
 
-# 3. Add 'its-pointless' repo for Android Build Tools
+# 3. Add 'its-pointless' repo
 if ! grep -q "pointless" /data/data/com.termux/files/usr/etc/apt/sources.list.d/* 2>/dev/null; then
     echo -e "${YELLOW}Adding 'its-pointless' repository...${NC}"
     pkg update && pkg install -y gnupg curl
@@ -36,20 +33,19 @@ if ! grep -q "pointless" /data/data/com.termux/files/usr/etc/apt/sources.list.d/
 fi
 
 # 4. Install ALL dependencies
-echo -e "📦 Installing dependencies..."
+echo -e "📦 Installing core developer tools..."
 pkg install -y rust kotlin gradle inotify-tools binutils-is-llvm git android-tools debianutils dx
 
 # 5. Fix Kotlin PATH
 KOTLIN_BIN="/data/data/com.termux/files/usr/opt/kotlin/bin"
-if [ -d "$KOTLIN_BIN" ] && ! echo "$PATH" | grep -q "$KOTLIN_BIN"; then
-    echo -e "${YELLOW}Fixing Kotlin PATH...${NC}"
+if [ -d "$KOTLIN_BIN" ]; then
     echo "export PATH=\$PATH:$KOTLIN_BIN" >> ~/.bashrc
     export PATH=$PATH:$KOTLIN_BIN
 fi
 
 # 6. Handle Source Code
 INSTALL_DIR="$HOME/.vibeview-src"
-echo -e "📡 Fetching source..."
+echo -e "📡 Fetching VibeView CLI..."
 
 if [ -d "$INSTALL_DIR" ]; then
     cd "$INSTALL_DIR"
@@ -60,32 +56,41 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# 7. Setup Android Classpath Shim
-echo -e "📦 Setting up Android SDK shim..."
-SYSTEM_JAR="/system/framework/framework.jar"
-SHIM_PATH="$INSTALL_DIR/android-shim.jar"
+# 7. THE LIBRARY HARVEST (New & Critical)
+echo -e "🚜 Harvesting core libraries (AndroidX/Compose)..."
+mkdir -p "$INSTALL_DIR/libs"
+cd "$INSTALL_DIR"
 
-if [ -f "$SYSTEM_JAR" ]; then
-    echo -e "${GREEN}✓ Found system framework. Using as shim.${NC}"
-    ln -sf "$SYSTEM_JAR" "$SHIM_PATH"
-else
-    echo -e "📡 Downloading remote shim..."
-    curl -sL "https://github.com/potatameister/VibeView/releases/download/v0.1-alpha/android-shim.jar" -o "$SHIM_PATH" || \
-    echo -e "${YELLOW}Warning: Could not provide SDK shim. Compilation might fail.${NC}"
-fi
+# Create a tiny gradle project to fetch only the metadata/jars we need
+cat <<EOF > fetch-libs.gradle
+repositories { google(); mavenCentral() }
+configurations { harvest }
+dependencies {
+    implementation("androidx.compose.ui:ui:1.6.0")
+    implementation("androidx.compose.material3:material3:1.2.0")
+    implementation("androidx.compose.runtime:runtime:1.6.0")
+    implementation("androidx.compose.foundation:foundation:1.6.0")
+    implementation("androidx.core:core-ktx:1.12.0")
+}
+task copyLibs(type: Copy) {
+    from configurations.compileClasspath
+    into "libs"
+}
+EOF
+
+# Run gradle to fetch the real JARs (this might take 1-2 mins)
+gradle -b fetch-libs.gradle copyLibs --no-daemon
 
 # 8. Build and Install CLI
 echo -e "🔨 Building CLI..."
 cd vibe-watch
 cargo build --release
 
-# 8. Global Installation
+# 9. Global Installation
 TARGET_BIN="/data/data/com.termux/files/usr/bin/vibe"
-echo -e "🚀 Finalizing installation..."
 ln -sf "$(pwd)/target/release/vibe-watch" "$TARGET_BIN"
 
-# 9. Verification
 echo -e "\n${GREEN}✅ VibeView is now 100% READY!${NC}"
-echo -e "Run: ${CYAN}source ~/.bashrc${NC} then ${CYAN}vibe doctor${NC}"
+echo -e "Try: ${CYAN}vibe doctor${NC}"
 echo ""
 vibe doctor
