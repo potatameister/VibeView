@@ -19,11 +19,20 @@
 -keep public class com.potatameister.vibeview.MainActivity { *; }
 -keep public class com.potatameister.vibeview.VibeSnippet { *; }
 
-# Keep Compose and Material 3
+# --- THE FIX FOR THE COMPILER ---
+# We must NOT obfuscate the libraries we use as a classpath
+# Otherwise the compiler can't find 'RoundedCornerShape' because it was renamed to 'a'
 -keep class androidx.compose.** { *; }
 -keep interface androidx.compose.** { *; }
 -keep class androidx.material3.** { *; }
+-keep interface androidx.material3.** { *; }
+-keep class androidx.foundation.** { *; }
+-keep interface androidx.foundation.** { *; }
+-keep class androidx.runtime.** { *; }
+-keep interface androidx.runtime.** { *; }
+-keep class androidx.ui.** { *; }
+-keep interface androidx.ui.** { *; }
 
 # General Android / Java keeps
--keepattributes Signature,Annotation,InnerClasses,EnclosingMethod
+-keepattributes Signature,Annotation,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable
 -dontnote **
