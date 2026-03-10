@@ -176,9 +176,17 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
     }
 
     // 2. Compile Kotlin
-    let status = Command::new("kotlinc")
-        .args(&["-d", "out/", "-Dkotlin.colors.enabled=false"])
-        .args(&kt_files)
+    let mut kotlinc = Command::new("kotlinc");
+    kotlinc.args(&["-d", "out/", "-Dkotlin.colors.enabled=false"]);
+    
+    // Auto-detect and include classpath shim
+    let install_dir = std::env::var("HOME").unwrap_or_default() + "/.vibeview-src";
+    let sdk_shim = format!("{}/android-shim.jar", install_dir);
+    if Path::new(&sdk_shim).exists() {
+        kotlinc.arg("-cp").arg(&sdk_shim);
+    }
+
+    let status = kotlinc.args(&kt_files)
         .current_dir(project_path)
         .status();
 
