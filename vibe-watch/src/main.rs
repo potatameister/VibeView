@@ -19,7 +19,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a VibeView project (in a new or current folder)
+    /// Initialize a VibeView project
     Init { 
         /// Optional name of the project folder
         name: Option<String> 
@@ -152,6 +152,30 @@ async fn start_watcher(path_str: &str) -> Result<()> {
     Ok(())
 }
 
+fn get_app_classpath() -> String {
+    // 1. Get the APK path of the VibeView App
+    let output = Command::new("pm")
+        .args(&["path", "com.potatameister.vibeview"])
+        .output();
+
+    let mut classpath = String::new();
+
+    if let Ok(out) = output {
+        let path_str = String::from_utf8_lossy(&out.stdout);
+        if let Some(path) = path_str.trim().strip_prefix("package:") {
+            classpath.push_str(path);
+        }
+    }
+
+    // 2. Add the system framework as a fallback/base
+    if !classpath.is_empty() {
+        classpath.push(':');
+    }
+    classpath.push_str("/system/framework/framework.jar");
+
+    classpath
+}
+
 async fn compile_and_push(project_path: &Path) -> Result<()> {
     let start = Instant::now();
     println!("{}", "🔨 Compiling...".blue());
@@ -161,7 +185,7 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
         fs::create_dir(&out_dir)?;
     }
 
-    // 1. Manually find all .kt files because kotlinc doesn't support recursive wildcards natively
+    // 1. Find all .kt files
     let mut kt_files = Vec::new();
     for entry in WalkDir::new(project_path)
         .into_iter()
@@ -172,20 +196,14 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
     }
 
     if kt_files.is_empty() {
-        return Err(anyhow::anyhow!("No .kt files found in project directory"));
+        return Err(anyhow::anyhow!("No .kt files found"));
     }
 
-    // 2. Compile Kotlin
+    // 2. Compile Kotlin with the Dynamic Classpath (The Secret Sauce)
+    let classpath = get_app_classpath();
     let mut kotlinc = Command::new("kotlinc");
-    kotlinc.args(&["-d", "out/", "-Dkotlin.colors.enabled=false"]);
+    kotlinc.args(&["-d", "out/", "-Dkotlin.colors.enabled=false", "-cp", &classpath]);
     
-    // Auto-detect and include classpath shim
-    let install_dir = std::env::var("HOME").unwrap_or_default() + "/.vibeview-src";
-    let sdk_shim = format!("{}/android-shim.jar", install_dir);
-    if Path::new(&sdk_shim).exists() {
-        kotlinc.arg("-cp").arg(&sdk_shim);
-    }
-
     let status = kotlinc.args(&kt_files)
         .current_dir(project_path)
         .status();
@@ -201,7 +219,7 @@ async fn compile_and_push(project_path: &Path) -> Result<()> {
     
     let mut status = dex_cmd.current_dir(project_path).status();
 
-    if status.is_err() {
+    if status.is_err() || !status.as_ref().map(|s| s.success()).unwrap_or(false) {
         status = Command::new("dx")
             .args(&["--dex", "--output=out/classes.dex", "out/*.class"])
             .current_dir(project_path)
@@ -262,6 +280,16 @@ fn run_doctor() -> Result<()> {
         println!("  {} DEX tool (d8/dx) is NOT installed. Action: pkg install dx", "✗".red());
     } else {
         println!("  {} DEX tool is installed", "✓".green());
+    }
+
+    // Check for App installation
+    let app_path = Command::new("pm").args(&["path", "com.potatameister.vibeview"]).output();
+    if let Ok(out) = app_path {
+        if out.status.success() {
+            println!("  {} VibeView App is linked", "✓".green());
+        } else {
+            println!("  {} VibeView App NOT found. Action: Install the APK from GitHub", "✗".red());
+        }
     }
 
     println!("\n{}", "Check complete!".cyan());
