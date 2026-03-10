@@ -56,13 +56,16 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# 7. THE LIBRARY HARVEST (No Flags Version)
+# 7. THE LIBRARY HARVEST (Isolated Project Version)
 echo -e "🚜 Harvesting core libraries (AndroidX/Compose)..."
 HARVEST_DIR="$INSTALL_DIR/harvest-temp"
 mkdir -p "$HARVEST_DIR"
 cd "$HARVEST_DIR"
 
-# Create a proper build.gradle (default name)
+# Create a settings file to isolate this from the parent project
+touch settings.gradle
+
+# Create a proper build.gradle
 cat <<EOF > build.gradle
 repositories { google(); mavenCentral() }
 configurations { harvest }
@@ -79,7 +82,7 @@ task copyLibs(type: Copy) {
 }
 EOF
 
-# Run gradle without -b flag
+# Run gradle
 gradle copyLibs --no-daemon || \
 echo -e "${RED}Warning: Library harvest failed. Check your internet.${NC}"
 
@@ -93,6 +96,6 @@ TARGET_BIN="/data/data/com.termux/files/usr/bin/vibe"
 ln -sf "$(pwd)/target/release/vibe-watch" "$TARGET_BIN"
 
 echo -e "\n${GREEN}✅ VibeView is now 100% READY!${NC}"
-echo -e "Try: ${CYAN}vibe doctor${NC}"
+echo -e "Run: ${CYAN}source ~/.bashrc${NC} then ${CYAN}vibe doctor${NC}"
 echo ""
 vibe doctor
