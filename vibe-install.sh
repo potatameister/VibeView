@@ -56,13 +56,14 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# 7. THE LIBRARY HARVEST (Fixed Gradle Command)
+# 7. THE LIBRARY HARVEST (No Flags Version)
 echo -e "🚜 Harvesting core libraries (AndroidX/Compose)..."
-mkdir -p "$INSTALL_DIR/libs"
-cd "$INSTALL_DIR"
+HARVEST_DIR="$INSTALL_DIR/harvest-temp"
+mkdir -p "$HARVEST_DIR"
+cd "$HARVEST_DIR"
 
-# Create a proper standalone build file
-cat <<EOF > harvest.gradle
+# Create a proper build.gradle (default name)
+cat <<EOF > build.gradle
 repositories { google(); mavenCentral() }
 configurations { harvest }
 dependencies {
@@ -74,17 +75,17 @@ dependencies {
 }
 task copyLibs(type: Copy) {
     from configurations.harvest
-    into "libs"
+    into "../libs"
 }
 EOF
 
-# Run gradle using the standard task execution
-gradle -b harvest.gradle copyLibs --no-daemon || \
+# Run gradle without -b flag
+gradle copyLibs --no-daemon || \
 echo -e "${RED}Warning: Library harvest failed. Check your internet.${NC}"
 
 # 8. Build and Install CLI
 echo -e "🔨 Building CLI..."
-cd vibe-watch
+cd "$INSTALL_DIR/vibe-watch"
 cargo build --release
 
 # 9. Global Installation
