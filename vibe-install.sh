@@ -56,30 +56,31 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# 7. THE LIBRARY HARVEST (New & Critical)
+# 7. THE LIBRARY HARVEST (Fixed Gradle Command)
 echo -e "🚜 Harvesting core libraries (AndroidX/Compose)..."
 mkdir -p "$INSTALL_DIR/libs"
 cd "$INSTALL_DIR"
 
-# Create a tiny gradle project to fetch only the metadata/jars we need
-cat <<EOF > fetch-libs.gradle
+# Create a proper standalone build file
+cat <<EOF > harvest.gradle
 repositories { google(); mavenCentral() }
 configurations { harvest }
 dependencies {
-    implementation("androidx.compose.ui:ui:1.6.0")
-    implementation("androidx.compose.material3:material3:1.2.0")
-    implementation("androidx.compose.runtime:runtime:1.6.0")
-    implementation("androidx.compose.foundation:foundation:1.6.0")
-    implementation("androidx.core:core-ktx:1.12.0")
+    harvest("androidx.compose.ui:ui:1.6.0")
+    harvest("androidx.compose.material3:material3:1.2.0")
+    harvest("androidx.compose.runtime:runtime:1.6.0")
+    harvest("androidx.compose.foundation:foundation:1.6.0")
+    harvest("androidx.core:core-ktx:1.12.0")
 }
 task copyLibs(type: Copy) {
-    from configurations.compileClasspath
+    from configurations.harvest
     into "libs"
 }
 EOF
 
-# Run gradle to fetch the real JARs (this might take 1-2 mins)
-gradle -b fetch-libs.gradle copyLibs --no-daemon
+# Run gradle using the standard task execution
+gradle -b harvest.gradle copyLibs --no-daemon || \
+echo -e "${RED}Warning: Library harvest failed. Check your internet.${NC}"
 
 # 8. Build and Install CLI
 echo -e "🔨 Building CLI..."
