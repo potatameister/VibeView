@@ -60,7 +60,13 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# 7. Build and Install CLI
+# 7. Download Android Classpath Shim
+echo -e "📦 Downloading Android SDK shim..."
+# We use a reliable public mirror for the android.jar shim
+curl -sL "https://github.com/potatameister/VibeView/releases/download/v0.1-alpha/android-shim.jar" -o "$INSTALL_DIR/android-shim.jar" || \
+echo -e "${YELLOW}Warning: Could not download shim. Compilation might fail until manually provided.${NC}"
+
+# 8. Build and Install CLI
 echo -e "🔨 Building CLI..."
 cd vibe-watch
 cargo build --release
