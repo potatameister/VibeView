@@ -60,11 +60,19 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# 7. Download Android Classpath Shim
-echo -e "📦 Downloading Android SDK shim..."
-# We use a reliable public mirror for the android.jar shim
-curl -sL "https://github.com/potatameister/VibeView/releases/download/v0.1-alpha/android-shim.jar" -o "$INSTALL_DIR/android-shim.jar" || \
-echo -e "${YELLOW}Warning: Could not download shim. Compilation might fail until manually provided.${NC}"
+# 7. Setup Android Classpath Shim
+echo -e "📦 Setting up Android SDK shim..."
+SYSTEM_JAR="/system/framework/framework.jar"
+SHIM_PATH="$INSTALL_DIR/android-shim.jar"
+
+if [ -f "$SYSTEM_JAR" ]; then
+    echo -e "${GREEN}✓ Found system framework. Using as shim.${NC}"
+    ln -sf "$SYSTEM_JAR" "$SHIM_PATH"
+else
+    echo -e "📡 Downloading remote shim..."
+    curl -sL "https://github.com/potatameister/VibeView/releases/download/v0.1-alpha/android-shim.jar" -o "$SHIM_PATH" || \
+    echo -e "${YELLOW}Warning: Could not provide SDK shim. Compilation might fail.${NC}"
+fi
 
 # 8. Build and Install CLI
 echo -e "🔨 Building CLI..."
